@@ -2140,7 +2140,7 @@ VK_IMPORT_INSTANCE
 					.multiViewport                           = VK_FALSE,
 					.samplerAnisotropy                       = supportedFeatures.samplerAnisotropy,
 					.textureCompressionETC2                  = supportedFeatures.textureCompressionETC2,
-					.textureCompressionASTC_LDR              = VK_FALSE,
+					.textureCompressionASTC_LDR              = supportedFeatures.textureCompressionASTC_LDR,
 					.textureCompressionBC                    = supportedFeatures.textureCompressionBC,
 					.occlusionQueryPrecise                   = supportedFeatures.occlusionQueryPrecise,
 					.pipelineStatisticsQuery                 = VK_FALSE,
@@ -9750,21 +9750,39 @@ VK_DESTROY
 			: s_textureFormat[m_colorFormat].m_fmt
 			;
 
+		const bool preRotation = BX_ENABLED(BGFX_CONFIG_RENDERER_VULKAN_PRE_ROTATION)
+			&& !BX_ENABLED(BX_PLATFORM_NX);
+
+		const VkSurfaceTransformFlagBitsKHR preTransform = BX_ENABLED(BX_PLATFORM_NX)
+			? VK_SURFACE_TRANSFORM_INHERIT_BIT_KHR
+			: preRotation ? surfaceCapabilities.currentTransform : VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR
+			;
+
+		const bool swapExtent = preRotation
+			&& 0 != (surfaceCapabilities.currentTransform & (0
+				| VK_SURFACE_TRANSFORM_ROTATE_90_BIT_KHR
+				| VK_SURFACE_TRANSFORM_ROTATE_270_BIT_KHR
+				) )
+			;
+
+		const uint32_t reqWidth  = swapExtent ? m_desc.height : m_desc.width;
+		const uint32_t reqHeight = swapExtent ? m_desc.width  : m_desc.height;
+
 		const uint32_t width = bx::clamp<uint32_t>(
-			  m_desc.width
+			  reqWidth
 			, surfaceCapabilities.minImageExtent.width
 			, surfaceCapabilities.maxImageExtent.width
 			);
 		const uint32_t height = bx::clamp<uint32_t>(
-			  m_desc.height
+			  reqHeight
 			, surfaceCapabilities.minImageExtent.height
 			, surfaceCapabilities.maxImageExtent.height
 			);
-		if (width != m_desc.width || height != m_desc.height)
+		if (width != reqWidth || height != reqHeight)
 		{
 			BX_TRACE("Clamped swapchain resolution from %dx%d to %dx%d"
-					, m_desc.width
-					, m_desc.height
+					, reqWidth
+					, reqHeight
 					, width
 					, height
 					);
@@ -9840,6 +9858,7 @@ VK_DESTROY
 		m_sci.imageExtent.width  = width;
 		m_sci.imageExtent.height = height;
 		m_sci.imageUsage         = imageUsage;
+		m_sci.preTransform       = preTransform;
 		m_sci.compositeAlpha     = compositeAlpha;
 		m_sci.presentMode        = s_presentMode[presentModeIdx].mode;
 		m_sci.clipped            = VK_FALSE;
