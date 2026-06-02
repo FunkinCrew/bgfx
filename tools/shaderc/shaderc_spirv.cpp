@@ -907,6 +907,16 @@ namespace bgfx { namespace spirv
 
 					uint16_t size = writeUniformArray(_shaderWriter, uniforms, _options.shaderType == 'f');
 
+					for (auto& resource : resourcesrefl.uniform_buffers)
+					{
+						const uint32_t blockSize = bx::alignUp(uint32_t(refl.get_declared_struct_size(refl.get_type(resource.base_type_id) ) ), 16);
+
+						if (blockSize > size)
+						{
+							size = uint16_t(blockSize);
+						}
+					}
+
 					uint32_t shaderSize = (uint32_t)spirv.size() * sizeof(uint32_t);
 					bx::write(_shaderWriter, shaderSize, &err);
 					bx::write(_shaderWriter, spirv.data(), shaderSize, &err);

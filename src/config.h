@@ -247,6 +247,12 @@
 #	define BGFX_CONFIG_RENDERER_VULKAN_ROBUST_BUFFER_ACCESS 0
 #endif // BGFX_CONFIG_RENDERER_VULKAN_ROBUST_BUFFER_ACCESS
 
+/// Create Vulkan swap chains with the surface's transform (pre-rotation), so the
+/// app handles rotating it instead of the display compositor. Google labels this as the "fast path"
+#ifndef BGFX_CONFIG_RENDERER_VULKAN_PRE_ROTATION
+#	define BGFX_CONFIG_RENDERER_VULKAN_PRE_ROTATION 0
+#endif // BGFX_CONFIG_RENDERER_VULKAN_PRE_ROTATION
+
 /// Enable debug text.
 #ifndef BGFX_CONFIG_DEBUG_TEXT
 #	define BGFX_CONFIG_DEBUG_TEXT 1

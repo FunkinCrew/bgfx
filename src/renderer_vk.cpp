@@ -2091,7 +2091,7 @@ VK_IMPORT_INSTANCE
 					.multiViewport                           = VK_FALSE,
 					.samplerAnisotropy                       = supportedFeatures.samplerAnisotropy,
 					.textureCompressionETC2                  = supportedFeatures.textureCompressionETC2,
-					.textureCompressionASTC_LDR              = VK_FALSE,
+					.textureCompressionASTC_LDR              = supportedFeatures.textureCompressionASTC_LDR,
 					.textureCompressionBC                    = supportedFeatures.textureCompressionBC,
 					.occlusionQueryPrecise                   = supportedFeatures.occlusionQueryPrecise,
 					.pipelineStatisticsQuery                 = VK_FALSE,
@@ -9644,21 +9644,39 @@ VK_DESTROY
 			: s_textureFormat[m_colorFormat].m_fmt
 			;
 
+		const bool preRotation = BX_ENABLED(BGFX_CONFIG_RENDERER_VULKAN_PRE_ROTATION)
+			&& !BX_ENABLED(BX_PLATFORM_NX);
+
+		const VkSurfaceTransformFlagBitsKHR preTransform = BX_ENABLED(BX_PLATFORM_NX)
+			? VK_SURFACE_TRANSFORM_INHERIT_BIT_KHR
+			: preRotation ? surfaceCapabilities.currentTransform : VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR
+			;
+
+		const bool swapExtent = preRotation
+			&& 0 != (surfaceCapabilities.currentTransform & (0
+				| VK_SURFACE_TRANSFORM_ROTATE_90_BIT_KHR
+				| VK_SURFACE_TRANSFORM_ROTATE_270_BIT_KHR
+				) )
+			;
+
+		const uint32_t reqWidth  = swapExtent ? m_desc.height : m_desc.width;
+		const uint32_t reqHeight = swapExtent ? m_desc.width  : m_desc.height;
+
 		const uint32_t width = bx::clamp<uint32_t>(
-			  m_desc.width
+			  reqWidth
 			, surfaceCapabilities.minImageExtent.width
 			, surfaceCapabilities.maxImageExtent.width
 			);
 		const uint32_t height = bx::clamp<uint32_t>(
-			  m_desc.height
+			  reqHeight
 			, surfaceCapabilities.minImageExtent.height
 			, surfaceCapabilities.maxImageExtent.height
 			);
-		if (width != m_desc.width || height != m_desc.height)
+		if (width != reqWidth || height != reqHeight)
 		{
 			BX_TRACE("Clamped swapchain resolution from %dx%d to %dx%d"
-					, m_desc.width
-					, m_desc.height
+					, reqWidth
+					, reqHeight
 					, width
 					, height
 					);
@@ -9734,6 +9752,7 @@ VK_DESTROY
 		m_sci.imageExtent.width  = width;
 		m_sci.imageExtent.height = height;
 		m_sci.imageUsage         = imageUsage;
+		m_sci.preTransform       = preTransform;
 		m_sci.compositeAlpha     = compositeAlpha;
 		m_sci.presentMode        = s_presentMode[presentModeIdx].mode;
 		m_sci.clipped            = VK_FALSE;
@@ -11651,6 +11670,9 @@ VK_DESTROY
 		uint32_t currentBindHash = 0;
 		uint32_t descriptorSetCount = 0;
 
+		ChunkedScratchBufferOffset currentSbo = {};
+		uint32_t currentNumOffsets = 0;
+
 		struct PipelineState
 		{
 			const VertexLayout* layouts[BGFX_CONFIG_MAX_VERTEX_STREAMS];
@@ -12085,20 +12107,22 @@ VK_DESTROY
 
 					if (VK_NULL_HANDLE != program.m_descriptorSetLayout)
 					{
-						ChunkedScratchBufferOffset sbo;
-
 						const uint32_t vsSize = program.m_vsh->m_size;
-						uint32_t numOffsets = 0;
 
-						if (constantsChanged
-						||  hasPredefined)
+						if (0 == vsSize)
 						{
-							if (vsSize > 0)
-							{
-								uniformScratchBuffer.write(sbo, m_vsScratch, vsSize);
-								numOffsets = 1;
-							}
+							currentSbo = {};
+							currentNumOffsets = 0;
 						}
+						else if (constantsChanged
+						||       hasPredefined)
+						{
+							uniformScratchBuffer.write(currentSbo, m_vsScratch, vsSize);
+							currentNumOffsets = 1;
+						}
+
+						const ChunkedScratchBufferOffset& sbo = currentSbo;
+						const uint32_t numOffsets = currentNumOffsets;
 
 						bx::HashMurmur2A hash;
 						hash.begin();
@@ -12446,20 +12470,24 @@ VK_DESTROY
 
 					if (VK_NULL_HANDLE != program.m_descriptorSetLayout)
 					{
-						ChunkedScratchBufferOffset sbo;
-
 						const uint32_t vsSize = program.m_vsh->m_size;
 						const uint32_t fsSize = NULL != program.m_fsh ? program.m_fsh->m_size : 0;
-						uint32_t numOffsets = 0;
 
-						if (true
-						&& (constantsChanged || hasPredefined)
-						&& (0 < vsSize || 0 < fsSize)
-						   )
+						if (0 == vsSize
+						&&  0 == fsSize)
 						{
-							uniformScratchBuffer.write(sbo, m_vsScratch, vsSize, m_fsScratch, fsSize);
-							numOffsets = (0 < vsSize) + (0 < fsSize);
+							currentSbo = {};
+							currentNumOffsets = 0;
 						}
+						else if (constantsChanged
+						||       hasPredefined)
+						{
+							uniformScratchBuffer.write(currentSbo, m_vsScratch, vsSize, m_fsScratch, fsSize);
+							currentNumOffsets = (0 < vsSize) + (0 < fsSize);
+						}
+
+						const ChunkedScratchBufferOffset& sbo = currentSbo;
+						const uint32_t numOffsets = currentNumOffsets;
 
 						bx::HashMurmur2A hash;
 						hash.begin();
