@@ -2084,7 +2084,18 @@ static_assert(BX_COUNTOF(s_accessNames) == Access::Count, "Invalid s_accessNames
 
 					if (NULL != frameBuffer.m_swapChain->m_drawable)
 					{
-						presentCommandBuffer->presentDrawable( (MTL::Drawable*)frameBuffer.m_swapChain->m_drawable);
+						MTL::Drawable* drawable = (MTL::Drawable*)frameBuffer.m_swapChain->m_drawable;
+						presentCommandBuffer->presentDrawable(drawable);
+
+						bx::Semaphore* presentSemaphore = &frameBuffer.m_swapChain->m_presentSemaphore;
+						drawable->addPresentedHandler(
+							MTL::DrawablePresentedHandlerFunction(
+								[presentSemaphore](MTL::Drawable*)
+								{
+									presentSemaphore->post();
+								})
+							);
+
 						MTL_RELEASE_DEFERRED(frameBuffer.m_swapChain->m_drawable);
 					}
 				}
@@ -5153,6 +5164,11 @@ static_assert(BX_COUNTOF(s_accessNames) == Access::Count, "Invalid s_accessNames
 
 	SwapChainMtl::~SwapChainMtl()
 	{
+		for (uint32_t ii = 0; ii < m_maxFramesInFlight; ++ii)
+		{
+			m_presentSemaphore.wait(100);
+		}
+
 		MTL_RELEASE(m_metalLayer, 2);
 		MTL_RELEASE_DEFERRED(m_drawable);
 
@@ -5314,6 +5330,11 @@ static_assert(BX_COUNTOF(s_accessNames) == Access::Count, "Invalid s_accessNames
 		}
 
 		m_nwh = _nwh;
+
+		const SwapChain& mainSwapChain = s_renderMtl->m_mainSwapChain;
+		const uint32_t latency = mainSwapChain.maxFrameLatency != 0 ? mainSwapChain.maxFrameLatency : BGFX_CONFIG_MAX_FRAME_LATENCY;
+		m_maxFramesInFlight = bx::max<uint32_t>(latency - 1, 1);
+		m_presentSemaphore.post(m_maxFramesInFlight);
 	}
 
 	void SwapChainMtl::releaseBackBuffer()
@@ -5504,7 +5525,15 @@ static_assert(BX_COUNTOF(s_accessNames) == Access::Count, "Invalid s_accessNames
 		{
 			const bool occluded = isWindowOccluded(m_nwh);
 
-			m_drawable = occluded ? NULL : m_metalLayer->nextDrawable();
+			if (occluded)
+			{
+				m_drawable = NULL;
+			}
+			else
+			{
+				m_presentSemaphore.wait();
+				m_drawable = m_metalLayer->nextDrawable();
+			}
 
 			if (m_drawable != NULL)
 			{
