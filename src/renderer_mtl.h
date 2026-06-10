@@ -530,6 +530,7 @@ namespace bgfx { namespace mtl
 			, m_maxAnisotropy(0)
 			, m_colorFormat(TextureFormat::Count)
 			, m_borrowedDepth(false)
+			, m_maxFramesInFlight(2)
 		{
 		}
 
@@ -557,6 +558,9 @@ namespace bgfx { namespace mtl
 		void* m_nwh;
 		TextureFormat::Enum m_colorFormat;
 		bool m_borrowedDepth;
+
+		bx::Semaphore m_presentSemaphore;
+		uint32_t      m_maxFramesInFlight;
 	};
 
 	struct FrameBufferMtl
