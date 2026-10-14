@@ -6,6 +6,19 @@
 #ifndef SHADERC_H_HEADER_GUARD
 #define SHADERC_H_HEADER_GUARD
 
+#ifndef SHADERC_CONFIG_LIBRARY
+#	define SHADERC_CONFIG_LIBRARY 0
+#endif // SHADERC_CONFIG_LIBRARY
+
+#if SHADERC_CONFIG_LIBRARY
+#	define getUniformTypeName    getUniformTypeName_shaderc
+#	define nameToUniformTypeEnum nameToUniformTypeEnum_shaderc
+#	define s_uniformTypeName     s_uniformTypeName_shaderc
+#	define g_allocator           g_shaderc_allocator
+#	define fatal                 fatal_shaderc
+#	define trace                 trace_shaderc
+#endif
+
 namespace bgfx
 {
 	extern bool g_verbose;
@@ -147,6 +160,8 @@ namespace bgfx
 		uint32_t uav;
 	};
 
+	typedef bool (*ShaderReadFileFn)(const char* _filePath, std::string& _out, void* _userData);
+
 	struct Options
 	{
 		Options();
@@ -182,6 +197,9 @@ namespace bgfx
 
 		bool optimize;
 		uint32_t optimizationLevel;
+
+		ShaderReadFileFn readFile;
+		void* readFileUserData;
 	};
 
 	typedef std::vector<Uniform> UniformArray;
@@ -201,6 +219,7 @@ namespace bgfx
 
 	const char* getPsslPreamble();
 
+	bool compileShader(const char* _varying, const char* _comment, char* _shader, uint32_t _shaderLen, const Options& _options, bx::WriterI* _shaderWriter, bx::WriterI* _messageWriter);
 } // namespace bgfx
 
 #endif // SHADERC_H_HEADER_GUARD
