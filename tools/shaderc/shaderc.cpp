@@ -281,6 +281,8 @@ namespace bgfx
 		, uses16BitTypes(false)
 		, optimize(false)
 		, optimizationLevel(3)
+		, readFile(NULL)
+		, readFileUserData(NULL)
 	{
 	}
 
@@ -719,6 +721,8 @@ namespace bgfx
 		Preprocessor(const char* _filePath, bool _essl, bx::WriterI* _messageWriter)
 			: m_filePath(_filePath)
 			, m_messageWriter(_messageWriter)
+			, m_readFile(NULL)
+			, m_readFileUserData(NULL)
 			, m_hadError(false)
 		{
 			if (!_essl)
@@ -786,6 +790,12 @@ namespace bgfx
 		{
 			m_depends += " \\\n ";
 			m_depends += _fileName;
+		}
+
+		void setReadFile(ShaderReadFileFn _fn, void* _userData)
+		{
+			m_readFile = _fn;
+			m_readFileUserData = _userData;
 		}
 
 		bool run(const char* _input)
@@ -905,8 +915,23 @@ namespace bgfx
 			bx::write(m_messageWriter, temp, bx::strLen(temp), &err);
 		}
 
-		static bool readFile(const bx::FilePath& _filePath, bx::WriterI* _writer, bx::Error* _err)
+		bool readFile(const bx::FilePath& _filePath, bx::WriterI* _writer, bx::Error* _err)
 		{
+			if (NULL != m_readFile)
+			{
+				std::string text;
+
+				if (m_readFile(_filePath.getCPtr(), text, m_readFileUserData) )
+				{
+					if (!text.empty() )
+					{
+						bx::write(_writer, text.c_str(), int32_t(text.size() ), _err);
+					}
+
+					return _err->isOk();
+				}
+			}
+
 			bx::FileReader reader;
 			bx::Error err;
 
@@ -960,6 +985,8 @@ namespace bgfx
 		stl::vector<std::string> m_defines;
 		stl::vector<bx::FilePath> m_includeDirs;
 		bx::WriterI* m_messageWriter;
+		ShaderReadFileFn m_readFile;
+		void* m_readFileUserData;
 		bool m_hadError;
 	};
 
@@ -1213,6 +1240,7 @@ namespace bgfx
 		}
 
 		Preprocessor preprocessor(_options.inputFilePath.c_str(), 0 != esslVersion, _messageWriter);
+		preprocessor.setReadFile(_options.readFile, _options.readFileUserData);
 
 		for (size_t ii = 0; ii < _options.includeDirs.size(); ++ii)
 		{
@@ -1351,7 +1379,11 @@ namespace bgfx
 				preprocessor.setDefine("BX_PLATFORM_IOS=1");
 			}
 
-			if (profile->lang != ShadingLang::Metal)
+			if (profile->lang == ShadingLang::SpirV)
+			{
+				preprocessor.setDefine("BGFX_SHADER_LANGUAGE_SPIRV=1");
+			}
+			else if (profile->lang != ShadingLang::Metal)
 			{
 				preprocessor.setDefine(glslDefine);
 				preprocessor.setDefine(esslDefine);
@@ -2814,6 +2846,7 @@ namespace bgfx
 
 } // namespace bgfx
 
+#if !SHADERC_CONFIG_LIBRARY
 int main(int _argc, const char* _argv[])
 {
 	bx::DefaultAllocator allocator;
@@ -2821,3 +2854,4 @@ int main(int _argc, const char* _argv[])
 
 	return bgfx::compileShader(args.getArgc(), args.getArgv() );
 }
+#endif

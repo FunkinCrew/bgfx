@@ -40,6 +40,7 @@ namespace bgfx
 		static void static_deallocate(void* _ptr, size_t /*_bytes*/);
 	};
 
+#if !SHADERC_CONFIG_LIBRARY
 	void* TinyStlAllocator::static_allocate(size_t _bytes)
 	{
 		return bx::alloc(g_allocator, _bytes);
@@ -52,6 +53,7 @@ namespace bgfx
 			bx::free(g_allocator, _ptr);
 		}
 	}
+#endif
 } // namespace bgfx
 
 #define TINYSTL_ALLOCATOR bgfx::TinyStlAllocator
