@@ -1783,39 +1783,6 @@ namespace bgfx
 	{
 		BGFX_PROFILER_SCOPE("bgfx/Sort", kColorSubmit);
 
-		for (uint32_t ii = 0, num = m_numUsedViews; ii < num; ++ii)
-		{
-			View& view = m_view[ii];
-			Rect rect(0, 0, uint16_t(m_mainSwapChain.width), uint16_t(m_mainSwapChain.height) );
-
-			if (isValid(view.m_fbh) )
-			{
-				const FrameBufferRef& fbr = s_ctx->m_frameBufferRef[view.m_fbh.idx];
-				const BackbufferRatio::Enum bbRatio = fbr.m_window
-					? BackbufferRatio::Count
-					: BackbufferRatio::Enum(s_ctx->m_textureRef[fbr.un.m_th[0].idx].m_bbRatio)
-					;
-
-				if (BackbufferRatio::Count != bbRatio)
-				{
-					getTextureSizeFromRatio(bbRatio, rect.m_width, rect.m_height);
-				}
-				else
-				{
-					rect.m_width  = fbr.m_width;
-					rect.m_height = fbr.m_height;
-				}
-			}
-
-			view.m_clippedRect = view.m_rect;
-			view.m_clippedRect.intersect(rect);
-
-			if (!view.m_scissor.isZero() )
-			{
-				view.m_scissor.intersect(rect);
-			}
-		}
-
 		m_viewOrder[BGFX_CONFIG_MAX_VIEWS] = UINT16_MAX;
 
 		reserveSortKeys(m_numRenderItems);
@@ -3303,6 +3270,35 @@ namespace bgfx
 					&& !m_frameBufferHandle.isValid(view.m_fbh.idx) )
 					{
 						view.m_fbh = BGFX_INVALID_HANDLE;
+					}
+
+					Rect rect(0, 0, uint16_t(m_init.swapChain.width), uint16_t(m_init.swapChain.height) );
+
+					if (isValid(view.m_fbh) )
+					{
+						const FrameBufferRef& fbr = m_frameBufferRef[view.m_fbh.idx];
+						const BackbufferRatio::Enum bbRatio = fbr.m_window
+							? BackbufferRatio::Count
+							: BackbufferRatio::Enum(m_textureRef[fbr.un.m_th[0].idx].m_bbRatio)
+							;
+
+						if (BackbufferRatio::Count != bbRatio)
+						{
+							getTextureSizeFromRatio(bbRatio, rect.m_width, rect.m_height);
+						}
+						else
+						{
+							rect.m_width  = fbr.m_width;
+							rect.m_height = fbr.m_height;
+						}
+					}
+
+					view.m_clippedRect = view.m_rect;
+					view.m_clippedRect.intersect(rect);
+
+					if (!view.m_scissor.isZero() )
+					{
+						view.m_scissor.intersect(rect);
 					}
 
 					m_submit->m_viewOrder[id]    = order;
